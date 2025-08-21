@@ -1,0 +1,146 @@
+import torch
+import torchaudio
+
+# 打印版本，便于复现实验环境
+print(torch.__version__)
+print(torchaudio.__version__)
+
+# 依赖：SQUIM 管线、以及参考指标库（用于对照真值）
+try:
+    from pesq import pesq
+    from pystoi import stoi
+    from torchaudio.pipelines import SQUIM_OBJECTIVE, SQUIM_SUBJECTIVE
+except ImportError:
+    # 在 Colab 上跑不起来时，官方建议的安装提示（原样保留）
+    try:
+        import google.colab  # noqa: F401
+        print(
+            """
+            To enable running this notebook in Google Colab, install nightly
+            torch and torchaudio builds by adding the following code block to the top
+            of the notebook before running it:
+            !pip3 uninstall -y torch torchvision torchaudio
+            !pip3 install --pre torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/nightly/cpu
+            !pip3 install pesq
+            !pip3 install pystoi
+            """
+        )
+    except Exception:
+        pass
+    raise
+
+import matplotlib.pyplot as plt
+import torchaudio.functional as F
+from IPython.display import Audio
+from torchaudio.utils import download_asset
+
+# 计算 SI-SNR（用于和模型估计的 SI-SDR 对照）
+def si_snr(estimate, reference, epsilon=1e-8):
+    estimate = estimate - estimate.mean()
+    reference = reference - reference.mean()
+    reference_pow = reference.pow(2).mean(axis=1, keepdim=True)
+    mix_pow = (estimate * reference).mean(axis=1, keepdim=True)
+    scale = mix_pow / (reference_pow + epsilon)
+    reference = scale * reference
+    error = estimate - reference
+
+    reference_pow = reference.pow(2)
+    error_pow = error.pow(2)
+
+    reference_pow = reference_pow.mean(axis=1)
+    error_pow = error_pow.mean(axis=1)
+
+    si_snr = 10 * torch.log10(reference_pow) - 10 * torch.log10(error_pow)
+    return si_snr.item()
+
+# 画波形/声谱图（可选）
+def plot(waveform, title, sample_rate=16000):
+    wav_numpy = waveform.numpy()
+    sample_size = waveform.shape[1]
+    time_axis = torch.arange(0, sample_size) / sample_rate
+
+    figure, axes = plt.subplots(2, 1)
+    axes[0].plot(time_axis, wav_numpy[0], linewidth=1)
+    axes[0].grid(True)
+    axes[1].specgram(wav_numpy[0], Fs=sample_rate)
+    figure.suptitle(title)
+
+# === (3) 下载并加载“干净语音 + 噪声”示例 ===
+SAMPLE_SPEECH = download_asset("tutorial-assets/Lab41-SRI-VOiCES-src-sp0307-ch127535-sg0042.wav")
+SAMPLE_NOISE = download_asset("tutorial-assets/Lab41-SRI-VOiCES-rm1-babb-mc01-stu-clo.wav")
+
+WAVEFORM_SPEECH, SAMPLE_RATE_SPEECH = torchaudio.load(SAMPLE_SPEECH)
+WAVEFORM_NOISE, SAMPLE_RATE_NOISE = torchaudio.load(SAMPLE_NOISE)
+WAVEFORM_NOISE = WAVEFORM_NOISE[0:1, :]  # 取一通道即可
+
+# SQUIM 仅支持 16 kHz，这里必要时重采样到 16k
+if SAMPLE_RATE_SPEECH != 16000:
+    WAVEFORM_SPEECH = F.resample(WAVEFORM_SPEECH, SAMPLE_RATE_SPEECH, 16000)
+if SAMPLE_RATE_NOISE != 16000:
+    WAVEFORM_NOISE = F.resample(WAVEFORM_NOISE, SAMPLE_RATE_NOISE, 16000)
+
+# 对齐长度（裁剪到相同的帧数）
+if WAVEFORM_SPEECH.shape[1] < WAVEFORM_NOISE.shape[1]:
+    WAVEFORM_NOISE = WAVEFORM_NOISE[:, : WAVEFORM_SPEECH.shape[1]]
+else:
+    WAVEFORM_SPEECH = WAVEFORM_SPEECH[:, : WAVEFORM_NOISE.shape[1]]
+
+# === (4) 合成两段不同 SNR 的失真语音：20 dB 与 -5 dB ===
+snr_dbs = torch.tensor([20, -5])
+WAVEFORM_DISTORTED = F.add_noise(WAVEFORM_SPEECH, WAVEFORM_NOISE, snr_dbs)
+
+# （可选）画图听音
+# plot(WAVEFORM_SPEECH, "Clean Speech")
+# plot(WAVEFORM_NOISE, "Noise")
+# plot(WAVEFORM_DISTORTED[0:1], f"Distorted Speech with {snr_dbs[0]}dB SNR")
+# plot(WAVEFORM_DISTORTED[1:2], f"Distorted Speech with {snr_dbs[1]}dB SNR")
+# plt.show()
+
+# === (6) 客观指标评估（STOI / PESQ / SI-SDR） ===
+objective_model = SQUIM_OBJECTIVE.get_model()
+
+# 20 dB 样本的预测与参考对照
+stoi_hyp, pesq_hyp, si_sdr_hyp = objective_model(WAVEFORM_DISTORTED[0:1, :])
+print(f"Estimated metrics for distorted speech at {snr_dbs[0]}dB are\n")
+print(f"STOI: {stoi_hyp[0]}")
+print(f"PESQ: {pesq_hyp[0]}")
+print(f"SI-SDR: {si_sdr_hyp[0]}\n")
+
+pesq_ref = pesq(16000, WAVEFORM_SPEECH[0].numpy(), WAVEFORM_DISTORTED[0].numpy(), mode="wb")
+stoi_ref = stoi(WAVEFORM_SPEECH[0].numpy(), WAVEFORM_DISTORTED[0].numpy(), 16000, extended=False)
+si_sdr_ref = si_snr(WAVEFORM_DISTORTED[0:1], WAVEFORM_SPEECH)
+print(f"Reference metrics for distorted speech at {snr_dbs[0]}dB are\n")
+print(f"STOI: {stoi_ref}")
+print(f"PESQ: {pesq_ref}")
+print(f"SI-SDR: {si_sdr_ref}")
+
+# -5 dB 样本的预测与参考对照
+stoi_hyp, pesq_hyp, si_sdr_hyp = objective_model(WAVEFORM_DISTORTED[1:2, :])
+print(f"Estimated metrics for distorted speech at {snr_dbs[1]}dB are\n")
+print(f"STOI: {stoi_hyp[0]}")
+print(f"PESQ: {pesq_hyp[0]}")
+print(f"SI-SDR: {si_sdr_hyp[0]}\n")
+
+pesq_ref = pesq(16000, WAVEFORM_SPEECH[0].numpy(), WAVEFORM_DISTORTED[1].numpy(), mode="wb")
+stoi_ref = stoi(WAVEFORM_SPEECH[0].numpy(), WAVEFORM_DISTORTED[1].numpy(), 16000, extended=False)
+si_sdr_ref = si_snr(WAVEFORM_DISTORTED[1:2], WAVEFORM_SPEECH)
+print(f"Reference metrics for distorted speech at {snr_dbs[1]}dB are\n")
+print(f"STOI: {stoi_ref}")
+print(f"PESQ: {pesq_ref}")
+print(f"SI-SDR: {si_sdr_ref}")
+
+# === (7) 主观指标评估（MOS，需一段“非匹配参考 NMR”） ===
+subjective_model = SQUIM_SUBJECTIVE.get_model()
+
+# 下载并加载一段 NMR（任意干净语音都可，这里用教程资产中的一段）
+NMR_SPEECH = download_asset("tutorial-assets/ctc-decoding/1688-142285-0007.wav")
+WAVEFORM_NMR, SAMPLE_RATE_NMR = torchaudio.load(NMR_SPEECH)
+if SAMPLE_RATE_NMR != 16000:
+    WAVEFORM_NMR = F.resample(WAVEFORM_NMR, SAMPLE_RATE_NMR, 16000)
+
+# 分别对两段不同 SNR 的失真语音估计 MOS
+mos = subjective_model(WAVEFORM_DISTORTED[0:1, :], WAVEFORM_NMR)
+print(f"Estimated MOS for distorted speech at {snr_dbs[0]}dB is MOS: {mos[0]}")
+
+mos = subjective_model(WAVEFORM_DISTORTED[1:2, :], WAVEFORM_NMR)
+print(f"Estimated MOS for distorted speech at {snr_dbs[1]}dB is MOS: {mos[0]}")
