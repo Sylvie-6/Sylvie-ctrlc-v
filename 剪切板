@@ -1,26 +1,4 @@
-https://pytorch.ac.cn/audio/stable/references.html
-try:
-    from pesq import pesq
-    from pystoi import stoi
-    from torchaudio.pipelines import SQUIM_OBJECTIVE, SQUIM_SUBJECTIVE
-except ImportError:
-    try:
-        import google.colab  # noqa: F401
+(.venv) PS D:\PythonProject> D:/PythonProject/.venv/Scripts/python.exe C:/Program Files/JetBrains/PyCharm 2024.3.2/plugins/python-ce/helpers/packaging_tool.py install pesq
+D:\PythonProject\.venv\Scripts\python.exe: can't open file 'C:\\Program': [Errno 2] No such file or directory
+(.venv) PS D:\PythonProject> D:\PythonProject\.venv\Scripts\activate.bat
 
-        print(
-            """
-            To enable running this notebook in Google Colab, install nightly
-            torch and torchaudio builds by adding the following code block to the top
-            of the notebook before running it:
-            !pip3 uninstall -y torch torchvision torchaudio
-            !pip3 install --pre torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/nightly/cpu
-            !pip3 install pesq
-            !pip3 install pystoi
-            """
-        )
-    except Exception:
-        pass
-    raise
-
-
-import matplotlib.pyplot as plt
