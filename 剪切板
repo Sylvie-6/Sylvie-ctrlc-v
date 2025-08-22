@@ -81,16 +81,29 @@ objective_model = SQUIM_OBJECTIVE().get_model()
 
 
 
+D:\PythonProject\.venv\Scripts\python.exe D:\PythonProject\QoS\TorchAudio\test.py 
+Stay tuned...
 D:\PythonProject\.venv\Lib\site-packages\torchaudio\_backend\utils.py:213: UserWarning: In 2.9, this function's implementation will be changed to use torchaudio.load_with_torchcodec` under the hood. Some parameters like ``normalize``, ``format``, ``buffer_size``, and ``backend`` will be ignored. We recommend that you port your code to rely directly on TorchCodec's decoder instead: https://docs.pytorch.org/torchcodec/stable/generated/torchcodec.decoders.AudioDecoder.html#torchcodec.decoders.AudioDecoder.
   warnings.warn(
 Traceback (most recent call last):
-  File "D:\PythonProject\QoS\TorchAudio\test.py", line 46, in <module>
-    SAMPLE_SPEECH = torchaudio.load("Lab41-SRI-VOiCES-src-sp0307-ch127535-sg0042.wav")
-  File "D:\PythonProject\.venv\Lib\site-packages\torchaudio\_backend\utils.py", line 221, in load
-    backend = dispatcher(uri, format, backend)
-  File "D:\PythonProject\.venv\Lib\site-packages\torchaudio\_backend\utils.py", line 117, in dispatcher
-    raise RuntimeError(f"Couldn't find appropriate backend to handle uri {uri} and format {format}.")
-RuntimeError: Couldn't find appropriate backend to handle uri Lab41-SRI-VOiCES-src-sp0307-ch127535-sg0042.wav and format None.
+  File "D:\PythonProject\QoS\TorchAudio\test.py", line 49, in <module>
+    WAVEFORM_SPEECH, SAMPLE_RATE_SPEECH = torchaudio.load(SAMPLE_SPEECH)
+                                          ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "D:\PythonProject\.venv\Lib\site-packages\torchaudio\_backend\utils.py", line 222, in load
+    return backend.load(uri, frame_offset, num_frames, normalize, channels_first, format, buffer_size)
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\PythonProject\.venv\Lib\site-packages\torchaudio\_backend\soundfile.py", line 27, in load
+    return soundfile_backend.load(uri, frame_offset, num_frames, normalize, channels_first, format)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\PythonProject\.venv\Lib\site-packages\torchaudio\_backend\soundfile_backend.py", line 221, in load
+    with soundfile.SoundFile(filepath, "r") as file_:
+         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "D:\PythonProject\.venv\Lib\site-packages\soundfile.py", line 690, in __init__
+    self._file = self._open(file, mode_int, closefd)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\PythonProject\.venv\Lib\site-packages\soundfile.py", line 1261, in _open
+    raise TypeError("Invalid file: {0!r}".format(self.name))
+TypeError: Invalid file: (tensor([[0.0183, 0.0180, 0.0180,  ..., 0.0018, 0.0019, 0.0032]]), 16000)
 
 
 
