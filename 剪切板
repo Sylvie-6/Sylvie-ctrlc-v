@@ -1,4 +1,4 @@
-conda install pytorch torchvision torchaudio pytorch-cuda=12.2 -c pytorch -c nvidia
+(torch_pyl) pyl@ubuntu-server:~/codes$ sudo conda install pytorch torchvision torchaudio pytorch-cuda=12.2 -c pytorch -c nvidia
 
 Channels:
  - pytorch
