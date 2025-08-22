@@ -81,26 +81,16 @@ objective_model = SQUIM_OBJECTIVE().get_model()
 
 
 
-D:\PythonProject\.venv\Scripts\python.exe D:\PythonProject\QoS\TorchAudio\test.py 
-Stay tuned...
-Traceback (most recent call last):
-  File "D:\PythonProject\.venv\Lib\site-packages\torchaudio\_torchcodec.py", line 81, in load_with_torchcodec
-    from torchcodec.decoders import AudioDecoder
-ModuleNotFoundError: No module named 'torchcodec.decoders'
-
-The above exception was the direct cause of the following exception:
-
+D:\PythonProject\.venv\Lib\site-packages\torchaudio\_backend\utils.py:213: UserWarning: In 2.9, this function's implementation will be changed to use torchaudio.load_with_torchcodec` under the hood. Some parameters like ``normalize``, ``format``, ``buffer_size``, and ``backend`` will be ignored. We recommend that you port your code to rely directly on TorchCodec's decoder instead: https://docs.pytorch.org/torchcodec/stable/generated/torchcodec.decoders.AudioDecoder.html#torchcodec.decoders.AudioDecoder.
+  warnings.warn(
 Traceback (most recent call last):
   File "D:\PythonProject\QoS\TorchAudio\test.py", line 46, in <module>
-    SAMPLE_SPEECH = torchaudio.load_with_torchcodec("Lab41-SRI-VOiCES-src-sp0307-ch127535-sg0042.wav")
-  File "D:\PythonProject\.venv\Lib\site-packages\torchaudio\_torchcodec.py", line 83, in load_with_torchcodec
-    raise ImportError(
-    ...<2 lines>...
-    ) from e
-ImportError: TorchCodec is required for load_with_torchcodec. Please install torchcodec to use this function.
-
-进程已结束，退出代码为 1
-
+    SAMPLE_SPEECH = torchaudio.load("Lab41-SRI-VOiCES-src-sp0307-ch127535-sg0042.wav")
+  File "D:\PythonProject\.venv\Lib\site-packages\torchaudio\_backend\utils.py", line 221, in load
+    backend = dispatcher(uri, format, backend)
+  File "D:\PythonProject\.venv\Lib\site-packages\torchaudio\_backend\utils.py", line 117, in dispatcher
+    raise RuntimeError(f"Couldn't find appropriate backend to handle uri {uri} and format {format}.")
+RuntimeError: Couldn't find appropriate backend to handle uri Lab41-SRI-VOiCES-src-sp0307-ch127535-sg0042.wav and format None.
 
 
 
