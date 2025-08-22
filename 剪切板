@@ -1,18 +1,44 @@
-pyl@ubuntu-server:~$ conda activate /work_home/root/yes/envs/torch_pyl
+(torch_pyl) pyl@ubuntu-server:~/codes$ conda install pystoi
+Channels:
+ - defaults
+Platform: linux-64
+Collecting package metadata (repodata.json): done
+Solving environment: failed
 
-CondaError: Run 'conda init' before 'conda activate'
+PackagesNotFoundError: The following packages are not available from current channels:
 
-pyl@ubuntu-server:~$ conda init
-no change     /work_home/root/yes/condabin/conda
-no change     /work_home/root/yes/bin/conda
-no change     /work_home/root/yes/bin/conda-env
-no change     /work_home/root/yes/bin/activate
-no change     /work_home/root/yes/bin/deactivate
-no change     /work_home/root/yes/etc/profile.d/conda.sh
-no change     /work_home/root/yes/etc/fish/conf.d/conda.fish
-no change     /work_home/root/yes/shell/condabin/Conda.psm1
-no change     /work_home/root/yes/shell/condabin/conda-hook.ps1
-no change     /work_home/root/yes/lib/python3.13/site-packages/xontrib/conda.xsh
-no change     /work_home/root/yes/etc/profile.d/conda.csh
-no change     /work_home/pyl/.bashrc
-No action taken.
+  - pystoi
+
+Current channels:
+
+  - defaults
+
+To search for alternate channels that may provide the conda package you're
+looking for, navigate to
+
+    https://anaconda.org
+
+and use the search bar at the top of the page.
+
+
+(torch_pyl) pyl@ubuntu-server:~/codes$ conda install pesq
+Channels:
+ - defaults
+Platform: linux-64
+Collecting package metadata (repodata.json): done
+Solving environment: failed
+
+PackagesNotFoundError: The following packages are not available from current channels:
+
+  - pesq
+
+Current channels:
+
+  - defaults
+
+To search for alternate channels that may provide the conda package you're
+looking for, navigate to
+
+    https://anaconda.org
+
+and use the search bar at the top of the page.
