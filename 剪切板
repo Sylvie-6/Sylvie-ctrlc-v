@@ -43,11 +43,11 @@ def plot(waveform, title, sample_rate=16000):
     axes[1].specgram(wav_numpy[0], Fs=sample_rate)
     figure.suptitle(title)
 
-SAMPLE_SPEECH = torchaudio.load_with_torchcodec("Lab41-SRI-VOiCES-src-sp0307-ch127535-sg0042.wav")
-SAMPLE_NOISE = torchaudio.load_with_torchcodec("Lab41-SRI-VOiCES-rm1-babb-mc01-stu-clo.wav")
+# SAMPLE_SPEECH = torchaudio.load("Lab41-SRI-VOiCES-src-sp0307-ch127535-sg0042.wav")
+# SAMPLE_NOISE = torchaudio.load("Lab41-SRI-VOiCES-rm1-babb-mc01-stu-clo.wav")
 
-WAVEFORM_SPEECH, SAMPLE_RATE_SPEECH = torchaudio.load(SAMPLE_SPEECH)
-WAVEFORM_NOISE, SAMPLE_RATE_NOISE = torchaudio.load(SAMPLE_NOISE)
+WAVEFORM_SPEECH, SAMPLE_RATE_SPEECH = torchaudio.load("Lab41-SRI-VOiCES-src-sp0307-ch127535-sg0042.wav")
+WAVEFORM_NOISE, SAMPLE_RATE_NOISE = torchaudio.load("Lab41-SRI-VOiCES-rm1-babb-mc01-stu-clo.wav")
 WAVEFORM_NOISE =WAVEFORM_NOISE[0:1, :]#取一通道
 
 #SQUIM仅支持16kHz，重采样到16k
@@ -75,36 +75,141 @@ plot(WAVEFORM_DISTORTED[1:2], f"Distorted Speech with {snr_dbs[1]}dB SNR")
 plt.show()
 
 #————————客观评估指标————————
-objective_model = SQUIM_OBJECTIVE().get_model()
+objective_model = SQUIM_OBJECTIVE.get_model()
 
 # 20 dB 样本的预测与参考对照
+stoi_hyp, pesq_hyp, si_sdr_hyp = objective_model(WAVEFORM_DISTORTED[0:1, :])
+print(f"Estimated metrics for distorted speech at {snr_dbs[0]}dB are\n")
+print(f"STOI: {stoi_hyp[0]}")
+print(f"PESQ: {pesq_hyp[0]}")
+print(f"SI-SDR: {si_sdr_hyp[0]}\n")
 
+pesq_ref = pesq(16000, WAVEFORM_SPEECH[0].numpy(), WAVEFORM_DISTORTED[0].numpy(), mode="wb")
+stoi_ref = stoi(WAVEFORM_SPEECH[0].numpy(), WAVEFORM_DISTORTED[0].numpy(), 16000, extended=False)
+si_sdr_ref = si_snr(WAVEFORM_DISTORTED[0:1], WAVEFORM_SPEECH)
+print(f"Reference metrics for distorted speech at {snr_dbs[0]}dB are\n")
+print(f"STOI: {stoi_ref}")
+print(f"PESQ: {pesq_ref}")
+print(f"SI-SDR: {si_sdr_ref}")
+
+# -5 dB 样本的预测与参考对照
+stoi_hyp, pesq_hyp, si_sdr_hyp = objective_model(WAVEFORM_DISTORTED[1:2, :])
+print(f"Estimated metrics for distorted speech at {snr_dbs[1]}dB are\n")
+print(f"STOI: {stoi_hyp[0]}")
+print(f"PESQ: {pesq_hyp[0]}")
+print(f"SI-SDR: {si_sdr_hyp[0]}\n")
+
+pesq_ref = pesq(16000, WAVEFORM_SPEECH[0].numpy(), WAVEFORM_DISTORTED[0].numpy(), mode="wb")
+stoi_ref = stoi(WAVEFORM_SPEECH[0].numpy(), WAVEFORM_DISTORTED[1].numpy(), 16000, extended=False)
+si_sdr_ref = si_snr(WAVEFORM_DISTORTED[1:2], WAVEFORM_SPEECH)
+print(f"Reference metrics for distorted speech at {snr_dbs[1]}dB are\n")
+print(f"STOI: {stoi_ref}")
+print(f"PESQ: {pesq_ref}")
+print(f"SI-SDR: {si_sdr_ref}")
+
+#————————————————主管指标评估 MOS+NMR————————————————
+subjective_model = SQUIM_SUBJECTIVE().get_model()
+
+#NMR语音
+# NMR_SPEECH = torchaudio.load("1688-142285-0007.wav")
+WAVEFORM_NMR, SAMPLE_RATE_NMR = torchaudio.load("1688-142285-0007.wav")
+if SAMPLE_RATE_NMR != 16000:
+    WAVEFORM_NMR = F.resample(WAVEFORM_NMR, SAMPLE_RATE_NMR, 16000)
+
+#对两段SNR失真语音估计MOS
+mos = subjective_model(WAVEFORM_DISTORTED[0:1, :], WAVEFORM_NMR)
+print(f"Estimated MOS for distorted speech at {snr_dbs[0]}dB is MOS: {mos[0]}")
+
+mos = subjective_model(WAVEFORM_DISTORTED[1:2, :], WAVEFORM_NMR)
+print(f"Estimated MOS for distorted speech at {snr_dbs[1]}dB is MOS: {mos[0]}")
 
 
 D:\PythonProject\.venv\Scripts\python.exe D:\PythonProject\QoS\TorchAudio\test.py 
 Stay tuned...
 D:\PythonProject\.venv\Lib\site-packages\torchaudio\_backend\utils.py:213: UserWarning: In 2.9, this function's implementation will be changed to use torchaudio.load_with_torchcodec` under the hood. Some parameters like ``normalize``, ``format``, ``buffer_size``, and ``backend`` will be ignored. We recommend that you port your code to rely directly on TorchCodec's decoder instead: https://docs.pytorch.org/torchcodec/stable/generated/torchcodec.decoders.AudioDecoder.html#torchcodec.decoders.AudioDecoder.
   warnings.warn(
+D:\PythonProject\.venv\Lib\site-packages\torchaudio\pipelines\_squim_pipeline.py:53: UserWarning: torchaudio.utils.download.download_asset has been deprecated. This deprecation is part of a large refactoring effort to transition TorchAudio into a maintenance phase. Please see https://github.com/pytorch/audio/issues/3902 for more information. It will be removed from the 2.9 release. 
+  path = torchaudio.utils.download_asset(f"models/{self._path}")
 Traceback (most recent call last):
-  File "D:\PythonProject\QoS\TorchAudio\test.py", line 49, in <module>
-    WAVEFORM_SPEECH, SAMPLE_RATE_SPEECH = torchaudio.load(SAMPLE_SPEECH)
-                                          ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
-  File "D:\PythonProject\.venv\Lib\site-packages\torchaudio\_backend\utils.py", line 222, in load
-    return backend.load(uri, frame_offset, num_frames, normalize, channels_first, format, buffer_size)
-           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "D:\PythonProject\.venv\Lib\site-packages\torchaudio\_backend\soundfile.py", line 27, in load
-    return soundfile_backend.load(uri, frame_offset, num_frames, normalize, channels_first, format)
-           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "D:\PythonProject\.venv\Lib\site-packages\torchaudio\_backend\soundfile_backend.py", line 221, in load
-    with soundfile.SoundFile(filepath, "r") as file_:
-         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
-  File "D:\PythonProject\.venv\Lib\site-packages\soundfile.py", line 690, in __init__
-    self._file = self._open(file, mode_int, closefd)
-                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "D:\PythonProject\.venv\Lib\site-packages\soundfile.py", line 1261, in _open
-    raise TypeError("Invalid file: {0!r}".format(self.name))
-TypeError: Invalid file: (tensor([[0.0183, 0.0180, 0.0180,  ..., 0.0018, 0.0019, 0.0032]]), 16000)
+  File "D:\Applications\Python\Lib\urllib\request.py", line 1319, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+              encode_chunked=req.has_header('Transfer-encoding'))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Applications\Python\Lib\http\client.py", line 1338, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Applications\Python\Lib\http\client.py", line 1384, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Applications\Python\Lib\http\client.py", line 1333, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Applications\Python\Lib\http\client.py", line 1093, in _send_output
+    self.send(msg)
+    ~~~~~~~~~^^^^^
+  File "D:\Applications\Python\Lib\http\client.py", line 1037, in send
+    self.connect()
+    ~~~~~~~~~~~~^^
+  File "D:\Applications\Python\Lib\http\client.py", line 1479, in connect
+    self.sock = self._context.wrap_socket(self.sock,
+                ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+                                          server_hostname=server_hostname)
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Applications\Python\Lib\ssl.py", line 455, in wrap_socket
+    return self.sslsocket_class._create(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        sock=sock,
+        ^^^^^^^^^^
+    ...<5 lines>...
+        session=session
+        ^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\Applications\Python\Lib\ssl.py", line 1076, in _create
+    self.do_handshake()
+    ~~~~~~~~~~~~~~~~~^^
+  File "D:\Applications\Python\Lib\ssl.py", line 1372, in do_handshake
+    self._sslobj.do_handshake()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1028)
 
+During handling of the above exception, another exception occurred:
 
+Traceback (most recent call last):
+  File "D:\PythonProject\QoS\TorchAudio\test.py", line 78, in <module>
+    objective_model = SQUIM_OBJECTIVE.get_model()
+  File "D:\PythonProject\.venv\Lib\site-packages\torchaudio\pipelines\_squim_pipeline.py", line 53, in get_model
+    path = torchaudio.utils.download_asset(f"models/{self._path}")
+  File "D:\PythonProject\.venv\Lib\site-packages\torchaudio\_internal\module_utils.py", line 71, in wrapped
+    return func(*args, **kwargs)
+  File "D:\PythonProject\.venv\Lib\site-packages\torchaudio\utils\download.py", line 77, in download_asset
+    _download(key, path, progress=progress)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\PythonProject\.venv\Lib\site-packages\torchaudio\utils\download.py", line 21, in _download
+    download_url_to_file(url, path, progress=progress)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\PythonProject\.venv\Lib\site-packages\torch\hub.py", line 712, in download_url_to_file
+    u = urlopen(req)
+  File "D:\Applications\Python\Lib\urllib\request.py", line 189, in urlopen
+    return opener.open(url, data, timeout)
+           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "D:\Applications\Python\Lib\urllib\request.py", line 489, in open
+    response = self._open(req, data)
+  File "D:\Applications\Python\Lib\urllib\request.py", line 506, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+                              '_open', req)
+  File "D:\Applications\Python\Lib\urllib\request.py", line 466, in _call_chain
+    result = func(*args)
+  File "D:\Applications\Python\Lib\urllib\request.py", line 1367, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                        context=self._context)
+                        ^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Applications\Python\Lib\urllib\request.py", line 1322, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1028)>
+
+进程已结束，退出代码为 1
 
 
