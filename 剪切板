@@ -1,3 +1,18 @@
 pyl@ubuntu-server:~$ conda activate /work_home/root/yes/envs/torch_pyl
 
 CondaError: Run 'conda init' before 'conda activate'
+
+pyl@ubuntu-server:~$ conda init
+no change     /work_home/root/yes/condabin/conda
+no change     /work_home/root/yes/bin/conda
+no change     /work_home/root/yes/bin/conda-env
+no change     /work_home/root/yes/bin/activate
+no change     /work_home/root/yes/bin/deactivate
+no change     /work_home/root/yes/etc/profile.d/conda.sh
+no change     /work_home/root/yes/etc/fish/conf.d/conda.fish
+no change     /work_home/root/yes/shell/condabin/Conda.psm1
+no change     /work_home/root/yes/shell/condabin/conda-hook.ps1
+no change     /work_home/root/yes/lib/python3.13/site-packages/xontrib/conda.xsh
+no change     /work_home/root/yes/etc/profile.d/conda.csh
+no change     /work_home/pyl/.bashrc
+No action taken.
