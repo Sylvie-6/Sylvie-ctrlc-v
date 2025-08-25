@@ -1,177 +1,36 @@
-(torch_pyl) pyl@ubuntu-server:~/codes$ sudo conda install pytorch torchvision torchaudio pytorch-cuda=12.2 -c pytorch -c nvidia
+wav2vec 2.0 的结构分成三大块：
 
-Channels:
- - pytorch
- - nvidia
- - defaults
-Platform: linux-64
-Collecting package metadata (repodata.json): failed
+CNN 特征编码器 (Feature Encoder)
+输入：原始波形 (16kHz)
+输出：低帧率的潜在表示 𝑧𝑡​（每 20ms 一帧）
+7 层一维卷积 (Conv1d)，带 LayerNorm 和 GELU 激活。
+每层 stride 设置不同，整体下采样率约为 320（16kHz → 50Hz，即 20ms 一帧）。
+输出维度：
+base 模型：768 维
+large 模型：1024 维
+作用：代替传统的 MFCC/STFT，把原始波形直接压缩成时序特征。
 
-# >>>>>>>>>>>>>>>>>>>>>> ERROR REPORT <<<<<<<<<<<<<<<<<<<<<<
+Transformer 编码器 (Contextual Transformer)
+输入：特征编码器输出的序列
+输出：带上下文的深层表示 𝑐𝑡​
+类似 BERT/Transformer-Encoder 堆叠：
+base 模型：12 层，768 维，注意力头数 8，参数约 95M
+large 模型：24 层，1024 维，注意力头数 16，参数约 317M
+每层包含：
+多头自注意力 (Multi-Head Self-Attention)
+前馈网络 (FFN)，带 GELU
+残差连接 + LayerNorm
+作用：建模长时依赖，把局部特征 𝑧𝑡融合成全局表征 𝑐𝑡，捕捉音质/失真等跨时间特征。
 
-    Traceback (most recent call last):
-      File "/work_home/root/yes/lib/python3.13/site-packages/conda/exception_handler.py", line 28, in __call__
-        return func(*args, **kwargs)
-      File "/work_home/root/yes/lib/python3.13/site-packages/conda/cli/main.py", line 61, in main_subshell
-        exit_code = do_call(args, parser)
-      File "/work_home/root/yes/lib/python3.13/site-packages/conda/cli/conda_argparse.py", line 206, in do_call
-        result = getattr(module, func_name)(args, parser)
-      File "/work_home/root/yes/lib/python3.13/site-packages/conda/notices/core.py", line 141, in wrapper
-        return func(*args, **kwargs)
-      File "/work_home/root/yes/lib/python3.13/site-packages/conda/cli/main_install.py", line 165, in execute
-        install(args, parser, "install")
-        ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-      File "/work_home/root/yes/lib/python3.13/site-packages/conda/cli/install.py", line 439, in install
-        unlink_link_transaction = solver.solve_for_transaction(
-            deps_modifier=deps_modifier,
-        ...<4 lines>...
-            ),
-        )
-      File "/work_home/root/yes/lib/python3.13/site-packages/conda/core/solve.py", line 156, in solve_for_transaction
-        unlink_precs, link_precs = self.solve_for_diff(
-                                   ~~~~~~~~~~~~~~~~~~~^
-            update_modifier,
-            ^^^^^^^^^^^^^^^^
-        ...<5 lines>...
-            should_retry_solve,
-            ^^^^^^^^^^^^^^^^^^^
-        )
-        ^
-      File "/work_home/root/yes/lib/python3.13/site-packages/conda/core/solve.py", line 225, in solve_for_diff
-        final_precs = self.solve_final_state(
-            update_modifier,
-        ...<4 lines>...
-            should_retry_solve,
-        )
-      File "/work_home/root/yes/lib/python3.13/site-packages/conda_libmamba_solver/solver.py", line 166, in solve_final_state
-        index = self._collect_all_metadata(
-            channels=channels,
-        ...<2 lines>...
-            in_state=in_state,
-        )
-      File "/work_home/root/yes/lib/python3.13/site-packages/conda/common/io.py", line 87, in decorated
-        return f(*args, **kwds)
-      File "/work_home/root/yes/lib/python3.13/site-packages/conda_libmamba_solver/solver.py", line 265, in _collect_all_metadata
-        index = LibMambaIndexHelper(
-            channels=[*conda_build_channels, *channels],
-        ...<6 lines>...
-            pkgs_dirs=context.pkgs_dirs if context.offline else (),
-        )
-      File "/work_home/root/yes/lib/python3.13/site-packages/conda_libmamba_solver/index.py", line 181, in __init__
-        self.repos: list[_ChannelRepoInfo] = self._load_channels()
-                                             ~~~~~~~~~~~~~~~~~~~^^
-      File "/work_home/root/yes/lib/python3.13/site-packages/conda_libmamba_solver/index.py", line 285, in _load_channels
-        urls_to_json_path_and_state = self._fetch_repodata_jsons(tuple(urls_to_channel.keys()))
-      File "/work_home/root/yes/lib/python3.13/site-packages/conda_libmamba_solver/index.py", line 349, in _fetch_repodata_jsons
-        for (url, path, state) in executor.map(self._fetch_one_repodata_json, urls)
-                                  ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      File "/work_home/root/yes/lib/python3.13/concurrent/futures/_base.py", line 619, in result_iterator
-        yield _result_or_cancel(fs.pop())
-              ~~~~~~~~~~~~~~~~~^^^^^^^^^^
-      File "/work_home/root/yes/lib/python3.13/concurrent/futures/_base.py", line 317, in _result_or_cancel
-        return fut.result(timeout)
-               ~~~~~~~~~~^^^^^^^^^
-      File "/work_home/root/yes/lib/python3.13/concurrent/futures/_base.py", line 456, in result
-        return self.__get_result()
-               ~~~~~~~~~~~~~~~~~^^
-      File "/work_home/root/yes/lib/python3.13/concurrent/futures/_base.py", line 401, in __get_result
-        raise self._exception
-      File "/work_home/root/yes/lib/python3.13/concurrent/futures/thread.py", line 59, in run
-        result = self.fn(*self.args, **self.kwargs)
-      File "/work_home/root/yes/lib/python3.13/site-packages/conda_libmamba_solver/index.py", line 375, in _fetch_one_repodata_json
-        json_path, state = subdir_data.repo_fetch.fetch_latest_path()
-                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
-      File "/work_home/root/yes/lib/python3.13/site-packages/conda/gateways/repodata/__init__.py", line 749, in fetch_latest_path
-        _, state = self.fetch_latest()
-                   ~~~~~~~~~~~~~~~~~^^
-      File "/work_home/root/yes/lib/python3.13/site-packages/conda/gateways/repodata/__init__.py", line 789, in fetch_latest
-        cache.load_state()
-        ~~~~~~~~~~~~~~~~^^
-      File "/work_home/root/yes/lib/python3.13/site-packages/conda/gateways/repodata/__init__.py", line 585, in load_state
-        self.load(state_only=True)
-        ~~~~~~~~~^^^^^^^^^^^^^^^^^
-      File "/work_home/root/yes/lib/python3.13/site-packages/conda/gateways/repodata/__init__.py", line 532, in load
-        with self.lock("r+") as state_file:
-             ~~~~~~~~~^^^^^^
-      File "/work_home/root/yes/lib/python3.13/contextlib.py", line 141, in __enter__
-        return next(self.gen)
-      File "/work_home/root/yes/lib/python3.13/site-packages/conda/gateways/repodata/__init__.py", line 651, in lock
-        with self.cache_path_state.open(mode) as state_file, lock(state_file):
-             ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
-      File "/work_home/root/yes/lib/python3.13/pathlib/_local.py", line 537, in open
-        return io.open(self, mode, buffering, encoding, errors, newline)
-               ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    PermissionError: [Errno 13] Permission denied: '/work_home/root/yes/pkgs/cache/9dbdbf81.info.json'
+量化模块 (Quantization + Contrastive Objective, 训练阶段使用)
+用 Gumbel Softmax 把部分表示量化为“代码向量”（离散化）
+训练时做对比学习：预测未来帧的正确量化向量，区分干扰负样本
 
-`$ /work_home/root/yes/bin/conda install pytorch torchvision torchaudio pytorch-cuda=12.2 -c pytorch -c nvidia`
+Gumbel Softmax + Codebook：
+把 CNN 输出的一部分帧映射到 离散向量（类似词表 embedding）。
+这是自监督的关键：让模型预测“未来帧的量化结果”。
+对比学习目标 (Contrastive Loss)：
+给定上下文向量 𝑐𝑡，预测它未来某时刻的“正确量化向量”，并和一堆负样本对比（InfoNCE loss）。
+这样模型学到的特征不仅能重建波形，还捕捉到语义/音质信息。
 
-  environment variables:
-                 CIO_TEST=<not set>
-        CMAKE_PREFIX_PATH=/work_home/root/yes/envs/torch_pyl:/work_home/root/yes/envs/torch_pyl/
-                          x86_64-conda-linux-gnu/sysroot/usr
-      CONDA_BUILD_SYSROOT=/work_home/root/yes/envs/torch_pyl/x86_64-conda-linux-gnu/sysroot
-        CONDA_DEFAULT_ENV=torch_pyl
-                CONDA_EXE=/work_home/root/yes/bin/conda
-             CONDA_PREFIX=/work_home/root/yes/envs/torch_pyl
-           CONDA_PREFIX_1=/work_home/root/yes
-    CONDA_PROMPT_MODIFIER=(torch_pyl)
-         CONDA_PYTHON_EXE=/work_home/root/yes/bin/python
-               CONDA_ROOT=/work_home/root/yes
-              CONDA_SHLVL=2
-           CURL_CA_BUNDLE=<not set>
-               LD_PRELOAD=<not set>
-                     PATH=/work_home/root/yes/envs/torch_pyl/bin:/work_home/root/yes/condabin:/w
-                          ork_home/root/yes/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bi
-                          n:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
-       REQUESTS_CA_BUNDLE=<not set>
-            SSL_CERT_FILE=<not set>
-
-     active environment : torch_pyl
-    active env location : /work_home/root/yes/envs/torch_pyl
-            shell level : 2
-       user config file : /work_home/pyl/.condarc
- populated config files : /work_home/root/yes/.condarc
-          conda version : 25.7.0
-    conda-build version : not installed
-         python version : 3.13.5.final.0
-                 solver : libmamba (default)
-       virtual packages : __archspec=1=icelake
-                          __conda=25.7.0=0
-                          __cuda=12.2=0
-                          __glibc=2.31=0
-                          __linux=5.4.0=0
-                          __unix=0=0
-       base environment : /work_home/root/yes  (writable)
-      conda av data dir : /work_home/root/yes/etc/conda
-  conda av metadata url : None
-           channel URLs : http://10.155.97.247:8088/repository/conda-extra-proxy/pytorch/linux-64
-                          http://10.155.97.247:8088/repository/conda-extra-proxy/pytorch/noarch
-                          http://10.155.97.247:8088/repository/conda-proxy/nvidia/linux-64
-                          http://10.155.97.247:8088/repository/conda-proxy/nvidia/noarch
-                          http://10.155.97.247:8088/repository/conda-proxy/main/linux-64
-                          http://10.155.97.247:8088/repository/conda-proxy/main/noarch
-                          http://10.155.97.247:8088/repository/conda-proxy/free/linux-64
-                          http://10.155.97.247:8088/repository/conda-proxy/free/noarch
-                          http://10.155.97.247:8088/repository/conda-proxy/r/linux-64
-                          http://10.155.97.247:8088/repository/conda-proxy/r/noarch
-          package cache : /work_home/root/yes/pkgs
-                          /work_home/pyl/.conda/pkgs
-       envs directories : /work_home/root/yes/envs
-                          /work_home/pyl/.conda/envs
-               platform : linux-64
-             user-agent : conda/25.7.0 requests/2.32.4 CPython/3.13.5 Linux/5.4.0-26-generic ubuntu/20.04 glibc/2.31 solver/libmamba conda-libmamba-solver/25.4.0 libmambapy/2.0.5 aau/0.7.1 c/. s/. e/.
-                UID:GID : 1010:1010
-             netrc file : None
-           offline mode : False
-
-
-An unexpected error has occurred. Conda has prepared the above report.
-If you suspect this error is being caused by a malfunctioning plugin,
-consider using the --no-plugins option to turn off plugins.
-
-Example: conda --no-plugins install <package>
-
-Alternatively, you can set the CONDA_NO_PLUGINS environment variable on
-the command line to run the command without plugins enabled.
-
-Example: CONDA_NO_PLUGINS=true conda install <package>
+下采样模块 会把帧特征从 768/1024 维压到 32 维，再给两个任务头。
