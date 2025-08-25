@@ -1,3 +1,20 @@
+| 年份   | 论文题目                                                                                               | 是否非侵入      | 应用场景                     | 核心方法/算法                                         | 关键点                                  |
+| ---- | -------------------------------------------------------------------------------------------------- | ---------- | ------------------------ | ----------------------------------------------- | ------------------------------------ |
+| 2019 | **Intrusive and Non-Intrusive Perceptual Speech Quality Assessment Using CNN**                     | 两种（侵入+非侵入） | VoIP/电信                  | CNN 提取特征 (MFCC+pitch+能量)，支持带参考和无参考 MOS 预测       | 优于 PESQ/POLQA；RMSE 0.35，相关系数 0.89    |
+| 2019 | **Non-Intrusive Speech Quality Assessment Using Neural Networks**                                  | 非侵入        | VoIP、在线音频                | CNN / DNN (Mel特征、CQT、i-vector)                  | 基于众包 MOS 标签，Pearson 相关 0.87，MSE 0.15 |
+| 2020 | **Neural MOS Prediction for Synthesized Speech Using Multi-Task Learning with Spoofing Detection** | 非侵入        | 合成语音（TTS/VC）             | CNN-BLSTM (MOSNet) + 多任务学习 (Spoofing 检测 + 类型分类) | 提升 11.6%，缓解 MOS 标注主观偏差               |
+| 2021 | **MBNet: MOS Prediction for Synthesized Speech with Mean-Bias Network**                            | 非侵入        | 合成语音                     | MeanNet + BiasNet (利用个体打分偏差)                    | 捕捉个体听感差异，SRCC 提升 6.7% (VCC2016)      |
+| 2021 | **Speech Quality Assessment through MOS using Non-Matching References**                            | 半侵入（非匹配参考） | VoIP/VoLTE               | 使用非匹配参考 (NMR) + wav2vec2 表征                     | 避免严格参考需求，更贴近真实通信场景                   |
+| 2021 | **Generalization Ability of MOS Prediction Networks**                                              | 非侵入        | 跨语料 MOS 泛化               | MOSNet、wav2vec2、HuBERT                          | wav2vec2 在零样本场景下泛化最好，支持跨语言 (中/日/英)   |
+| 2021 | **DNSMOS Pro: A Reduced-Size DNN for Probabilistic MOS of Speech**                                 | 非侵入        | DNS/VoIP                 | 小型 DNN，端到端预测语音 MOS                              | 为在线降噪优化，计算效率高                        |
+| 2021 | **Non-Intrusive Audio Quality Assessment Based on DNN for MOS Prediction**                         | 非侵入        | VoIP/通话质量                | DNN (语音特征 → MOS 回归)                             | 提供可替代 PESQ 的快速评估                     |
+| 2021 | **DeePMOS: Deep Posterior Mean-Opinion-Score of Speech**                                           | 非侵入        | VoIP/语音合成                | Bayesian 深度模型 (预测 MOS 后验分布)                     | 提供不确定性度量，增强鲁棒性                       |
+| 2023 | **LDNet: Unified Listener Dependent Modeling in MOS Prediction**                                   | 非侵入        | 合成语音                     | Listener-Dependent 网络 (引入听众ID)                  | 引入“虚拟平均听众”，解决打分稀疏和个体差异               |
+| 2024 | **EMDSQA: Neural Speech Quality Assessment with Speaker Embedding**                                | 非侵入        | 在线通信 (VoIP, Zoom, Skype) | 自注意力网络 + Speaker Embedding (ECAPA-TDNN, U-Net)  | Pearson r = 0.92，实时推理仅 1.5% CPU 负载   |
+
+
+
+---
 wav2vec 2.0 的结构分成三大块：
 
 CNN 特征编码器 (Feature Encoder)
