@@ -1,3 +1,36 @@
+1. MOS prediction by SDN controller and User Equipment to maintain good quality for VoIP over WiFi
+目标：解决WiFi中VoIP用户切换时的音质下降问题。
+方法：
+移动节点端：利用 MLP（多层感知机）根据网络参数（时延、抖动、丢包率、播放丢失）预测 MOS，提前触发切换。
+SDN 控制器端：用 KNN 对接入点进行分类，选择最优接入点。
+阈值：当预测MOS < 4.03时准备切换，MOS = 3.7时触发切换。
+结果：相比基于 RSSI 的切换，VoIP MOS 保持在 4.35 左右，丢包率不超过 1.2%。
+2. Deep Learning Driven QoS Anomaly Detection for Network Performance Optimization
+目标：通过深度学习检测 QoS 异常，提升网络可靠性。
+方法：基于 UNSW-NB15 数据集，分别测试 CNN、LSTM 和 CNN-LSTM 混合模型，输入 QoS 参数（可用性、带宽、时延、抖动、丢包）。
+模型效果：
+CNN：准确率 91.45%，F1=91.29
+LSTM：准确率 93.45%，F1=93.45
+CNN-LSTM：准确率 98.67%，F1=98.67，误报率仅 0.01，最优。
+贡献：混合模型更好地捕捉时序和空间特征，显著提高QoS异常检测精度。
+3. Improved VoLTE QoE Estimation Procedure using Network Performance Metrics
+目标：提升VoLTE用户主观体验（QoE）的估计精度。
+方法：
+QoS 参数：丢包、网络抖动、抖动缓冲区大小。
+传统 G.107 MOS 在网络侧监控得到，但与用户真实感受差距较大。
+提出 VM_MOS 方法，基于优化的 QoE/QoS 数学关系：
+
+Ppl_eff 同时考虑丢包和抖动的综合影响。
+结果：VM_MOS 与 POLQA（ITU P.863 标准）差距仅 0.02~0.15，明显优于传统 G.107。
+意义：能在无需终端测试的情况下，从网络侧监控得到贴近用户感受的MOS估计。
+4. QoS Evaluation for Wireless Networks Using K-Nearest Neighbor (k-NN) Algorithm
+目标：利用 k-NN 算法进行无线网络 QoS 的分类与预测。
+输入参数：时延、抖动、丢包率。
+输出：QoS 评价（好/中/差），或连续 QoS 值。
+方法：
+分类：基于 k=5 时，准确率 ~99%，F1 分数接近 1。
+回归：R²=97.2%，均方误差很低，能输出连续 QoS 值（例如3.93/8）。
+
 特征一：CQT（Constant‑Q Transform，常 Q 变换，用于 CNN）
 把语音看成“随时间变化的频率能量图”。传统 STFT 用固定窗口，高频和低频的“分辨率”不一样，跟人耳的频带分辨率并不完全匹配。
 CQT 的频带是按几何级数划分，让每个频带的品质因数 Q=中心频率/带宽恒定，更贴近人耳在 500 Hz–20 kHz 的“恒定 Q”感知特性。
