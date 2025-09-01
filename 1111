@@ -1,5 +1,84 @@
 1. 研究背景
 
+问题：LTE 网络压力大，常常需要将流量卸载 (offload) 到 WiFi。但 WiFi 接入点 (AP) 选择不当会导致 MOS 降低、延迟和丢包增加。
+
+传统方法：多依赖 RSSI (接收信号强度) 或 SNIR (信噪加干扰比) 作为切换指标，但它们不能直接反映用户感知的语音质量。
+
+目标：提出一种 基于 MOS 预测的接入点选择方法，由 SDN 控制器驱动，使 handover 更加智能和以用户体验为中心。
+
+2. 输入与输出
+
+输入特征 (QoS 参数)：
+
+吞吐量 (Throughput)
+
+丢包率 (Packet Loss Rate)
+
+时延 (Delay)
+
+抖动 (Jitter)
+
+输出：预测的 MOS 值（1–5）。
+
+标签来自 E-model (ITU G.107) 计算的 MOS（即 R-factor → MOS 的公式），而非主观听测。
+
+3. 使用的模型与方法
+(1) MLP (Multilayer Perceptron)
+
+输入：归一化的 [吞吐量、丢包率、时延、抖动]。
+
+结构：输入层 → 多层隐藏层 (ReLU) → 输出层 (回归预测 MOS)。
+
+特点：能捕捉非线性关系，但不具备时间依赖建模能力。
+
+(2) LSTM (Long Short-Term Memory)
+
+输入：多个时刻的 QoS 序列（例如过去 10 个时间片的特征 + MOS 历史值）。
+
+结构：多层 LSTM → 输出单一 MOS 预测值 (many-to-one)。
+
+特点：保留 QoS 参数的时序依赖，适合长期 MOS 预测。
+
+(3) 参数优化：Grey Wolf Optimizer (GWO)
+
+用于优化 MLP 和 LSTM 的 权重、偏置、层数、神经元数、学习率等超参数。
+
+GWO 是一种受狼群捕猎行为启发的元启发式算法，能避免局部最优。
+
+4. 系统实现（SDN 控制器集成）
+
+数据采集：
+
+使用 OMNeT++ 仿真平台，搭建网络：1 个 eNodeB (LTE 基站)、5 个 WiFi AP、VoIP 服务器、50 个移动用户。
+
+收集 VoIP 流的 QoS 参数和 E-model MOS。
+
+SDN 控制器工作流：
+
+定期收集每个 AP 和 eNodeB 的 QoS 参数。
+
+用 MLP / LSTM 模型预测 MOS。
+
+如果 eNodeB MOS < 4，则触发 WiFi offload，选择 MOS > 4 的 AP。
+
+在多个候选 AP 中，基于 SNIR 或 RSSI 最优选择目标 AP。
+
+MOS < 3.5 作为阈值，触发紧急切换。
+
+5. 仿真与结果
+
+丢包率：由约 2% 降到 <1%（LSTM+SNIR 最优）。
+
+抖动：由 25 ms 降到 <7.6 ms；LSTM 比 MLP 额外降低 ~15%。
+
+时延：保持在 150 ms 以下；LSTM+SNIR 可稳定在 ~90 ms。
+
+吞吐量：提升 0.3–0.6 Mbps（LSTM+SNIR 最佳）。
+
+MOS：始终保持在 4.2–4.6 之间（优于传统 RSSI/SNIR 方法），LSTM+SNIR 场景下 MOS 达 4.5。
+
+1. 研究背景
+
 问题：在 WiFi 网络中，当用户设备 (UE) 移动时，需要频繁切换接入点 (handover)。
 
 如果切换时机不对，容易出现语音卡顿、丢包、MOS 下降。
