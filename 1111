@@ -1,3 +1,105 @@
+1. 研究背景与目标
+
+背景：在 LTE-A 移动网络环境下，真实 VoIP 语音流（40,000 个 RTP 包）被采集。
+
+目标：对 6 个关键 QoS/QoE 指标（多元时间序列）进行建模与预测，以便网络运营商提前进行资源调度和 QoE 管理。
+
+指标：
+
+MOS（Mean Opinion Score）
+
+BW（带宽消耗）
+
+RTT（往返时延）
+
+Jitter（抖动）
+
+DJB（去抖动缓冲区）
+
+SNR（信噪比）
+
+2. 数据收集与处理
+
+实验平台：
+
+车载终端 UE1（Linphone 软电话，支持 RTCP-XR 协议） ↔ UE2（固定 PC + Linphone + Wireshark）。
+
+驾驶 70 公里路线，采集到 约 40,000 RTP 语音包。
+
+使用 Opus 编码（6–128 kbps，可变码率，48kHz 采样）。
+
+指标提取：通过 Wireshark + RTCP-XR 报文字段提取：
+
+MOS ← 从 R-Factor 转换 (ITU G.107)
+
+BW ← RTP 流直接统计 kb/s
+
+RTT ← rtcp.xr.voipmetrics.rtdelay
+
+JIT ← frame.time delta 计算分组间隔差
+
+DJB ← rtcp.xr.voipmetrics.jbmax
+
+SNR ← (signal level − noise level)
+
+3. 方法流程
+
+预处理：VAR (Vector Autoregressive) 模型
+
+将六个指标建模为多元时间序列，捕捉相互依赖。
+
+使用 Akaike 信息准则 (AIC) 估计最佳滞后阶数 p=11。
+
+检查平稳性（特征值 <1，确保稳定）和残差独立性（Breusch–Godfrey 检验，p=0.4287 → 不拒绝 H0，残差无自相关）。
+
+转化为监督学习：滑动窗口
+
+输入：过去 p=11 步的多指标向量。
+
+输出：下一时刻的指标值（单步预测为主）。
+
+神经网络预测
+
+模型对比：
+
+RNN：基础结构，易受梯度消失影响。
+
+LSTM：引入记忆单元与门控，解决长期依赖。
+
+GRU：简化的 LSTM（更新门 + 重置门）。
+
+配置：单层，50 单元；SGD 优化器，lr=0.01，训练 30 epoch；特征归一化到 [0,1]。
+
+4. 实验结果
+
+预测效果（见 Fig.5）：
+
+MOS 在 4.38–4.5 范围，预测误差很小；
+
+RTT、Jitter 波动大，RNN 捕捉不稳，LSTM/GRU 更好；
+
+DJB 与 Jitter 同步震荡，GRU 能较好跟踪；
+
+SNR 有明显波动，但仍能预测趋势。
+
+定量结果（见 Table I）：
+
+MOS：GRU 最优（MAE=0.0056, RMSE=0.0059）；
+
+RTT/Jitter/DJB：LSTM 和 GRU 优于 RNN；
+
+整体：GRU 与 LSTM 交替最佳，GRU 在性能–计算效率折中上更优。
+
+计算复杂度（见 Fig.6）：
+
+RNN 时间复杂度最低；
+
+LSTM 随单元数增加，计算时间显著上升；
+
+GRU 增幅较温和，被认为是最佳折中选择。
+
+
+
 1. 论文做了什么（一眼看懂）
 
 任务：无参考（non-intrusive）下，对失真音频直接回归 MOS (1–5)。输入只要失真音频，不要干净参考。
