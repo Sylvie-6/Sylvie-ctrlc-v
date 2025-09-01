@@ -1,5 +1,101 @@
 1. 研究背景
 
+问题：在 WiFi 网络中，当用户设备 (UE) 移动时，需要频繁切换接入点 (handover)。
+
+如果切换时机不对，容易出现语音卡顿、丢包、MOS 下降。
+
+传统方法依赖 RSSI（接收信号强度），但 RSSI 并不能反映真实的语音质量。
+
+目标：利用 网络参数 (delay, jitter, packet loss, playout loss) 来预测 MOS，当 MOS 即将恶化时触发 handover，并由 SDN 控制器挑选最优的 AP。
+
+2. 模型与方法
+(1) 输入特征
+
+End-to-End Delay（端到端时延）
+
+Jitter（抖动）
+
+Packet Loss（丢包率）
+
+Playout Loss（回放丢包率，buffer 来不及播放的丢包）
+
+这些参数来自 仿真网络 (OMNeT++)，通过不同条件生成 MOS 数据集。
+
+(2) MOS 标签
+
+MOS 并不是人工听测，而是用 E-Model (ITU G.107) 的 R-factor → MOS 映射公式计算得到
+
+R-factor 综合了时延、丢包、设备损伤等，最后转化为 1–5 的 MOS。
+
+(3) 模型设计
+
+移动节点 (UE) 端：
+
+使用 多层感知机 (MLP, sklearn MLPClassifier) 来预测 MOS。
+
+最优结构：4 层隐藏层，每层 4 个神经元，激活函数 ReLU。
+
+数据标准化：StandardScaler。
+
+预测精度：在测试集上达到 100%（混淆矩阵结果）。
+
+阈值策略：
+
+MOS < 4.03 → UE 向 SDN 控制器请求 AP 列表（准备切换）；
+
+MOS < 3.7 → 触发切换执行。
+
+SDN 控制器端：
+
+采用 KNN 分类器（k=8~12 最优，误差≈2%），对候选接入点按 MOS 水平分档（poor, low, medium, high, best）。
+
+控制器向 UE 返回候选接入点的排序，UE 根据预测 MOS 选择最优 AP。
+
+3. 实施过程
+
+仿真平台：OMNeT++，场景包含 10 个 AP、1 个 VoIP 服务器、20 个节点（其中 5 个移动）。
+
+数据生成：
+
+Delay：周期性波动（如 40ms*(1.5+sin(...)))
+
+Packet Loss：uniform(0,1) 随机分布
+
+Jitter 和 Playout Loss 动态生成
+
+生成大量样本，形成数据集 (80% 训练, 20% 测试)。
+
+训练与验证：
+
+UE 侧：MLP 预测 MOS；
+
+控制器侧：KNN 分类 AP。
+
+运行机制：
+
+UE 实时监测网络参数 → 输入 MLP → 得到预测 MOS；
+
+如果 MOS 接近恶化阈值，提前请求控制器；
+
+控制器用 KNN 分类并返回 AP 列表；
+
+当 MOS < 3.7，立即触发 handover。
+
+4. 实验结果
+
+MOS 保持在 4.35 左右：切换过程平滑，MOS 没有显著下降。
+
+丢包率降低：在 MOS 预测驱动的 handover 下，丢包率从传统 RSSI 方法的高于 2% 降到 1.2% 以下。
+
+对比 RSSI 方法：
+
+RSSI 触发的 handover 只能反映信号强度，VoIP 质量仍然下降；
+
+MOS 预测方法直接反映用户感知质量，更适合实时语音业务。
+
+
+1. 研究背景
+
 VoIP 质量评估的难点：
 
 主观方法 (MOS 听测) → 精确但成本高，不能实时。
