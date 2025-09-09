@@ -1,4 +1,15 @@
 ```python
+import ssl
+import urllib.request
+
+# 临时禁用 SSL 证书验证
+ssl_context = ssl._create_unverified_context()
+urllib.request.install_opener(
+    urllib.request.build_opener(
+        urllib.request.HTTPSHandler(context=ssl_context)
+    )
+)
+
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
@@ -70,7 +81,7 @@ WAVEFORM_NOISE = WAVEFORM_NOISE[:, :min_len]
 
 #————————合成失真语音————————
 # snr_dbs = torch.tensor([20,-5])
-snr_dbs = torch.tensor(-5)
+snr_dbs = torch.tensor([-5])
 WAVEFORM_DISTORTED = F.add_noise(WAVEFORM_SPEECH, WAVEFORM_NOISE, snr_dbs)
 
 #————————可视化————————
@@ -82,19 +93,69 @@ plot(WAVEFORM_NOISE, "Noise")
 plot(WAVEFORM_DISTORTED, "Distorted Speech")
 plt.show()
 
+#————————客观评估指标————————
+objective_model = SQUIM_OBJECTIVE.get_model()
+
+stoi_hyp, pesq_hyp, si_sdr_hyp = objective_model(WAVEFORM_DISTORTED)
+print("Estimated metrics for distorted speech\n")
+print(f"STOI: {stoi_hyp[0]}")
+print(f"PESQ: {pesq_hyp[0]}")
+print(f"SI-SDR: {si_sdr_hyp[0]}\n")
+
+pesq_ref = pesq(16000, WAVEFORM_SPEECH.numpy(), WAVEFORM_DISTORTED.numpy(), mode="wb")
+stoi_ref = stoi(WAVEFORM_SPEECH.numpy(), WAVEFORM_DISTORTED.numpy(), 16000, extended=False)
+si_sdr_ref = si_snr(WAVEFORM_DISTORTED, WAVEFORM_SPEECH)
+print("Reference metrics for distorted speech\n")
+print(f"STOI: {stoi_ref}")
+print(f"PESQ: {pesq_ref}")
+print(f"SI-SDR: {si_sdr_ref}")
+
+#———————————————MOS+NMR————————————————
+subjective_model = SQUIM_SUBJECTIVE.get_model()
+
+#NMR语音
+# NMR_SPEECH = torchaudio.load("1688-142285-0007.wav")
+WAVEFORM_NMR, SAMPLE_RATE_NMR = torchaudio.load("1688-142285-0007.wav")
+if SAMPLE_RATE_NMR != 16000:
+    WAVEFORM_NMR = F.resample(WAVEFORM_NMR, SAMPLE_RATE_NMR, 16000)
+
+#对两段SNR失真语音估计MOS
+mos = subjective_model(WAVEFORM_DISTORTED, WAVEFORM_NMR)
+print(f"Estimated MOS for distorted speech is MOS: {mos[0]}")
+
+
+
+
 D:\PythonProject\.venv\Scripts\python.exe D:\PythonProject\QoS\TorchAudio\1.py 
 D:\PythonProject\.venv\Lib\site-packages\torchaudio\_backend\utils.py:213: UserWarning: In 2.9, this function's implementation will be changed to use torchaudio.load_with_torchcodec` under the hood. Some parameters like ``normalize``, ``format``, ``buffer_size``, and ``backend`` will be ignored. We recommend that you port your code to rely directly on TorchCodec's decoder instead: https://docs.pytorch.org/torchcodec/stable/generated/torchcodec.decoders.AudioDecoder.html#torchcodec.decoders.AudioDecoder.
   warnings.warn(
-Traceback (most recent call last):
-  File "D:\PythonProject\QoS\TorchAudio\1.py", line 84, in <module>
-    WAVEFORM_DISTORTED = F.add_noise(WAVEFORM_SPEECH, WAVEFORM_NOISE, snr_dbs)
-  File "D:\PythonProject\.venv\Lib\site-packages\torchaudio\functional\functional.py", line 2384, in add_noise
-    raise ValueError("Input leading dimensions don't match.")
-ValueError: Input leading dimensions don't match.
 torch.Size([2, 50560])
 torch.Size([1, 80000])
+D:\PythonProject\.venv\Lib\site-packages\torchaudio\pipelines\_squim_pipeline.py:53: UserWarning: torchaudio.utils.download.download_asset has been deprecated. This deprecation is part of a large refactoring effort to transition TorchAudio into a maintenance phase. Please see https://github.com/pytorch/audio/issues/3902 for more information. It will be removed from the 2.9 release. 
+  path = torchaudio.utils.download_asset(f"models/{self._path}")
+Estimated metrics for distorted speech
+
+STOI: 0.4186878204345703
+PESQ: 1.2619491815567017
+SI-SDR: -10.495059967041016
+
+Traceback (most recent call last):
+  File "D:\PythonProject\QoS\TorchAudio\1.py", line 104, in <module>
+    pesq_ref = pesq(16000, WAVEFORM_SPEECH.numpy(), WAVEFORM_DISTORTED.numpy(), mode="wb")
+  File "D:\PythonProject\.venv\Lib\site-packages\pesq\_pesq.py", line 114, in pesq
+    return _pesq_inner(ref, deg, fs, mode, on_error)
+  File "D:\PythonProject\.venv\Lib\site-packages\pesq\_pesq.py", line 65, in _pesq_inner
+    return cypesq(
+        fs,
+    ...<2 lines>...
+        mode_code
+    )
+  File "pesq/cypesq.pyx", line 171, in cypesq.cypesq
+ValueError: Buffer has wrong number of dimensions (expected 1, got 2)
 
 进程已结束，退出代码为 1
+
+
 
 
 
