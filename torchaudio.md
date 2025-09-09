@@ -1,22 +1,108 @@
 ```python
+import ssl
+import urllib.request
+
+# 临时禁用 SSL 证书验证
+ssl_context = ssl._create_unverified_context()
+urllib.request.install_opener(
+    urllib.request.build_opener(
+        urllib.request.HTTPSHandler(context=ssl_context)
+    )
+)
+
+import numpy as np
+import matplotlib.pyplot as plt
+import torch
+import torchaudio
+from pesq import pesq
+from pystoi import stoi
+from torchaudio.pipelines import SQUIM_OBJECTIVE, SQUIM_SUBJECTIVE
+from torchaudio.utils import download_asset
+import torchaudio.functional as F
+#播放音频
+from scipy.io import wavfile
+import sounddevice as sd
+
+#——————————计算SI-SNR，用于和模型估计的SI-SNR对照——————————
+def si_snr(estimate, reference, epsilon=1e-8):
+    estimate = estimate - estimate.mean()#去直流分量
+    reference = reference - reference.mean()
+    reference_pow = reference.pow(2).mean(axis=1, keepdim=True)#计算信号能量  .mean(axis=1, keepdim=True)：沿时间轴（假设 axis=1 是时间维度）求平均，保留原来的维度结构
+    mix_pow = (estimate * reference).mean(axis=1, keepdim=True)#信号与参考信号的互相关
+    scale = mix_pow / (reference_pow + epsilon) #优缩放因子 α
+    reference = scale * reference
+    error = estimate - reference
+
+    reference_pow = reference.pow(2)
+    error_pow = error.pow(2)
+
+    reference_pow = reference_pow.mean(axis=1)
+    error_pow = error_pow.mean(axis=1)
+
+    si_snr = 10* torch.log10(reference_pow) -10 * torch.log10(error_pow)
+    return si_snr.item()
+
+#——————————画波形/声谱图———————————
+def plot(waveform, title, sample_rate=16000):
+    wav_numpy = waveform.numpy()
+    sample_size = waveform.shape[1]
+    time_axis = torch.arange(0, sample_size) / sample_rate
+
+    figure, axes = plt.subplots(2,1)
+    axes[0].plot(time_axis, wav_numpy[0], linewidth=1)
+    axes[0].grid(True)
+    axes[1].specgram(wav_numpy[0], Fs=sample_rate)
+    figure.suptitle(title)
+
+# SAMPLE_SPEECH = torchaudio.load("Lab41-SRI-VOiCES-src-sp0307-ch127535-sg0042.wav")
+# SAMPLE_NOISE = torchaudio.load("Lab41-SRI-VOiCES-rm1-babb-mc01-stu-clo.wav")
+
+WAVEFORM_SPEECH, SAMPLE_RATE_SPEECH = torchaudio.load(r"D:\PythonProject\QoS\dataset\Speaker1_C_0.wav")
+WAVEFORM_NOISE, SAMPLE_RATE_NOISE = torchaudio.load("Lab41-SRI-VOiCES-rm1-babb-mc01-stu-clo.wav")
+# WAVEFORM_DISTORTED, SAMPLE_RATE_DISTORTED = torchaudio.load(r"D:\PythonProject\QoS\dataset\Speaker1_C_1.wav")
+
+#SQUIM仅支持16kHz，重采样到16k
+if SAMPLE_RATE_SPEECH != 16000:
+    WAVEFORM_SPEECH = F.resample(WAVEFORM_SPEECH, SAMPLE_RATE_SPEECH, 16000)
+if SAMPLE_RATE_NOISE != 16000:
+    WAVEFORM_NOISE = F.resample(WAVEFORM_NOISE, SAMPLE_RATE_NOISE, 16000)
+
+#对齐长度（裁剪到相同的帧数）
+min_len= min(WAVEFORM_SPEECH.shape[1], WAVEFORM_NOISE.shape[1])
+WAVEFORM_SPEECH = WAVEFORM_SPEECH[:min_len]
+WAVEFORM_NOISE = WAVEFORM_NOISE[:min_len]
+
+#————————合成失真语音————————
+# snr_dbs = torch.tensor([20,-5])
+snr_dbs = torch.tensor(-5)
+WAVEFORM_DISTORTED = F.add_noise(WAVEFORM_SPEECH, WAVEFORM_NOISE, snr_dbs)
+
+#单通道
+print(WAVEFORM_SPEECH.shape)
+# print(WAVEFORM_NOISE.shape)
+WAVEFORM_SPEECH = WAVEFORM_SPEECH.mean(dim=0,keepdim=True)
+WAVEFORM_NOISE =WAVEFORM_NOISE[0:1, :]#取一通道
+WAVEFORM_DISTORTED = WAVEFORM_DISTORTED.mean(dim=0,keepdim=True)
+
+#————————可视化————————
+
+plot(WAVEFORM_SPEECH, "Clean Speech")
+plot(WAVEFORM_NOISE, "Noise")
+# plot(WAVEFORM_DISTORTED[0:1], f"Distorted Speech with {snr_dbs[0]}dB SNR")
+# plot(WAVEFORM_DISTORTED[1:2], f"Distorted Speech with {snr_dbs[1]}dB SNR")
+plot(WAVEFORM_DISTORTED, "Distorted Speech")
+plt.show()
+
+
 D:\PythonProject\.venv\Scripts\python.exe D:\PythonProject\QoS\TorchAudio\1.py 
 D:\PythonProject\.venv\Lib\site-packages\torchaudio\_backend\utils.py:213: UserWarning: In 2.9, this function's implementation will be changed to use torchaudio.load_with_torchcodec` under the hood. Some parameters like ``normalize``, ``format``, ``buffer_size``, and ``backend`` will be ignored. We recommend that you port your code to rely directly on TorchCodec's decoder instead: https://docs.pytorch.org/torchcodec/stable/generated/torchcodec.decoders.AudioDecoder.html#torchcodec.decoders.AudioDecoder.
   warnings.warn(
-D:\PythonProject\.venv\Lib\site-packages\torchaudio\pipelines\_squim_pipeline.py:53: UserWarning: torchaudio.utils.download.download_asset has been deprecated. This deprecation is part of a large refactoring effort to transition TorchAudio into a maintenance phase. Please see https://github.com/pytorch/audio/issues/3902 for more information. It will be removed from the 2.9 release. 
-  path = torchaudio.utils.download_asset(f"models/{self._path}")
-Estimated metrics for distorted speech at 20dB are
-
-STOI: 0.9102518558502197
-PESQ: 1.863060474395752
-SI-SDR: 19.88925552368164
-
 Traceback (most recent call last):
-  File "D:\PythonProject\QoS\TorchAudio\1.py", line 99, in <module>
-    si_sdr_ref = si_snr(WAVEFORM_DISTORTED[0:1], WAVEFORM_SPEECH)
-  File "D:\PythonProject\QoS\TorchAudio\1.py", line 42, in si_snr
-    return si_snr.item()
-           ~~~~~~~~~~~^^
-RuntimeError: a Tensor with 2 elements cannot be converted to Scalar
+  File "D:\PythonProject\QoS\TorchAudio\1.py", line 77, in <module>
+    WAVEFORM_DISTORTED = F.add_noise(WAVEFORM_SPEECH, WAVEFORM_NOISE, snr_dbs)
+  File "D:\PythonProject\.venv\Lib\site-packages\torchaudio\functional\functional.py", line 2384, in add_noise
+    raise ValueError("Input leading dimensions don't match.")
+ValueError: Input leading dimensions don't match.
 
 进程已结束，退出代码为 1
 
