@@ -1,4 +1,31 @@
 ```python
+D:\PythonProject\.venv\Scripts\python.exe D:\PythonProject\QoS\TorchAudio\1.py 
+D:\PythonProject\.venv\Lib\site-packages\torchaudio\_backend\utils.py:213: UserWarning: In 2.9, this function's implementation will be changed to use torchaudio.load_with_torchcodec` under the hood. Some parameters like ``normalize``, ``format``, ``buffer_size``, and ``backend`` will be ignored. We recommend that you port your code to rely directly on TorchCodec's decoder instead: https://docs.pytorch.org/torchcodec/stable/generated/torchcodec.decoders.AudioDecoder.html#torchcodec.decoders.AudioDecoder.
+  warnings.warn(
+D:\PythonProject\.venv\Lib\site-packages\torchaudio\pipelines\_squim_pipeline.py:53: UserWarning: torchaudio.utils.download.download_asset has been deprecated. This deprecation is part of a large refactoring effort to transition TorchAudio into a maintenance phase. Please see https://github.com/pytorch/audio/issues/3902 for more information. It will be removed from the 2.9 release. 
+  path = torchaudio.utils.download_asset(f"models/{self._path}")
+Estimated metrics for distorted speech at 20dB are
+
+STOI: 0.9102518558502197
+PESQ: 1.863060474395752
+SI-SDR: 19.88925552368164
+
+Traceback (most recent call last):
+  File "D:\PythonProject\QoS\TorchAudio\1.py", line 99, in <module>
+    si_sdr_ref = si_snr(WAVEFORM_DISTORTED[0:1], WAVEFORM_SPEECH)
+  File "D:\PythonProject\QoS\TorchAudio\1.py", line 42, in si_snr
+    return si_snr.item()
+           ~~~~~~~~~~~^^
+RuntimeError: a Tensor with 2 elements cannot be converted to Scalar
+
+进程已结束，退出代码为 1
+
+
+
+```
+
+
+```python
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -123,7 +150,6 @@ print(f"Estimated MOS for distorted speech at {snr_dbs[0]}dB is MOS: {mos[0]}")
 
 mos = subjective_model(WAVEFORM_DISTORTED[1:2, :], WAVEFORM_NMR)
 print(f"Estimated MOS for distorted speech at {snr_dbs[1]}dB is MOS: {mos[0]}")
-
-
+```
 
 
