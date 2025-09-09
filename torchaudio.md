@@ -1,15 +1,4 @@
 ```python
-import ssl
-import urllib.request
-
-# 临时禁用 SSL 证书验证
-ssl_context = ssl._create_unverified_context()
-urllib.request.install_opener(
-    urllib.request.build_opener(
-        urllib.request.HTTPSHandler(context=ssl_context)
-    )
-)
-
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
