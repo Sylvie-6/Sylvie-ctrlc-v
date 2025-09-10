@@ -6,11 +6,9 @@ import torchaudio
 from pesq import pesq
 from pystoi import stoi
 from torchaudio.pipelines import SQUIM_OBJECTIVE, SQUIM_SUBJECTIVE
-from torchaudio.utils import download_asset
 import torchaudio.functional as F
-#播放音频
-from scipy.io import wavfile
-import sounddevice as sd
+
+
 
 #——————————计算SI-SNR，用于和模型估计的SI-SNR对照——————————
 def si_snr(estimate, reference, epsilon=1e-8):
@@ -91,8 +89,8 @@ print(f"STOI: {stoi_hyp[0]}")
 print(f"PESQ: {pesq_hyp[0]}")
 print(f"SI-SDR: {si_sdr_hyp[0]}\n")
 
-pesq_ref = pesq(16000, WAVEFORM_SPEECH.numpy(), WAVEFORM_DISTORTED.numpy(), mode="wb")
-stoi_ref = stoi(WAVEFORM_SPEECH.numpy(), WAVEFORM_DISTORTED.numpy(), 16000, extended=False)
+pesq_ref = pesq(16000, WAVEFORM_SPEECH[0].numpy(), WAVEFORM_DISTORTED[0].numpy(), mode="wb")
+stoi_ref = stoi(WAVEFORM_SPEECH[0].numpy(), WAVEFORM_DISTORTED[0].numpy(), 16000, extended=False)
 si_sdr_ref = si_snr(WAVEFORM_DISTORTED, WAVEFORM_SPEECH)
 print("Reference metrics for distorted speech\n")
 print(f"STOI: {stoi_ref}")
@@ -104,47 +102,19 @@ subjective_model = SQUIM_SUBJECTIVE.get_model()
 
 #NMR语音
 # NMR_SPEECH = torchaudio.load("1688-142285-0007.wav")
-WAVEFORM_NMR, SAMPLE_RATE_NMR = torchaudio.load("1688-142285-0007.wav")
+WAVEFORM_NMR, SAMPLE_RATE_NMR = torchaudio.load(r"D:\PythonProject\QoS\AISHELL-2-sample\data\wav\C0936\IC0936W0131.wav")#AISHELL-2中文语音数据集
 if SAMPLE_RATE_NMR != 16000:
     WAVEFORM_NMR = F.resample(WAVEFORM_NMR, SAMPLE_RATE_NMR, 16000)
-
-#对两段SNR失真语音估计MOS
-mos = subjective_model(WAVEFORM_DISTORTED, WAVEFORM_NMR)
-print(f"Estimated MOS for distorted speech is MOS: {mos[0]}")
+plot(WAVEFORM_NMR, "NMR")
+plt.show()
 
 
-
-
-D:\PythonProject\.venv\Scripts\python.exe D:\PythonProject\QoS\TorchAudio\1.py 
-D:\PythonProject\.venv\Lib\site-packages\torchaudio\_backend\utils.py:213: UserWarning: In 2.9, this function's implementation will be changed to use torchaudio.load_with_torchcodec` under the hood. Some parameters like ``normalize``, ``format``, ``buffer_size``, and ``backend`` will be ignored. We recommend that you port your code to rely directly on TorchCodec's decoder instead: https://docs.pytorch.org/torchcodec/stable/generated/torchcodec.decoders.AudioDecoder.html#torchcodec.decoders.AudioDecoder.
-  warnings.warn(
-torch.Size([2, 50560])
-torch.Size([1, 80000])
-D:\PythonProject\.venv\Lib\site-packages\torchaudio\pipelines\_squim_pipeline.py:53: UserWarning: torchaudio.utils.download.download_asset has been deprecated. This deprecation is part of a large refactoring effort to transition TorchAudio into a maintenance phase. Please see https://github.com/pytorch/audio/issues/3902 for more information. It will be removed from the 2.9 release. 
-  path = torchaudio.utils.download_asset(f"models/{self._path}")
-Estimated metrics for distorted speech
-
-STOI: 0.4186878204345703
-PESQ: 1.2619491815567017
-SI-SDR: -10.495059967041016
-
-Traceback (most recent call last):
-  File "D:\PythonProject\QoS\TorchAudio\1.py", line 104, in <module>
-    pesq_ref = pesq(16000, WAVEFORM_SPEECH.numpy(), WAVEFORM_DISTORTED.numpy(), mode="wb")
-  File "D:\PythonProject\.venv\Lib\site-packages\pesq\_pesq.py", line 114, in pesq
-    return _pesq_inner(ref, deg, fs, mode, on_error)
-  File "D:\PythonProject\.venv\Lib\site-packages\pesq\_pesq.py", line 65, in _pesq_inner
-    return cypesq(
-        fs,
-    ...<2 lines>...
-        mode_code
-    )
-  File "pesq/cypesq.pyx", line 171, in cypesq.cypesq
-ValueError: Buffer has wrong number of dimensions (expected 1, got 2)
-
-进程已结束，退出代码为 1
-
-
+#估计MOS
+mos = []
+mos.append(subjective_model(WAVEFORM_SPEECH, WAVEFORM_NMR)[0].item())
+mos.append(subjective_model(WAVEFORM_DISTORTED, WAVEFORM_NMR)[0].item())
+print(f"Estimated MOS for clean speech is MOS: {mos[0]}")
+print(f"Estimated MOS for distorted speech is MOS: {mos[1]}")
 
 
 
