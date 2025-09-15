@@ -1,16 +1,24 @@
 ```python
-import numpy as np
-import matplotlib.pyplot as plt
+import os, glob, csv
 import torch
 import torchaudio
+import torchaudio.functional as F
 from pesq import pesq
 from pystoi import stoi
 from torchaudio.pipelines import SQUIM_OBJECTIVE, SQUIM_SUBJECTIVE
-import torchaudio.functional as F
 
+# --------------------- 可配置路径 ---------------------
+CLEAN_DIR = r"D:\PythonProject\QoS\dataset\ABCS_database\Audio\train"   # 干净语音
+# CLEAN_DIR = r"D:\PythonProject\QoS\dataset\test"   # 测试
+NOISE_PATH = r"Lab41-SRI-VOiCES-rm1-babb-mc01-stu-clo.wav"   # 唯一噪声
+NMR_DIR   = r"D:\PythonProject\QoS\AISHELL-2-sample\data\wav"          # 多条干净 NMR（建议4~8条）
+OUT_CSV   = r"D:\PythonProject\QoS\TorchAudio\labels_train.csv"           # 输出CSV
+SNR_LIST  = [20]                                              # 需要的SNR
+SR = 16000
+# -------------------------------------------------------
 
+device = "cpu"
 
-#——————————计算SI-SNR，用于和模型估计的SI-SNR对照——————————
 def si_snr(estimate, reference, epsilon=1e-8):
     estimate = estimate - estimate.mean()#去直流分量
     reference = reference - reference.mean()
@@ -29,223 +37,134 @@ def si_snr(estimate, reference, epsilon=1e-8):
     si_snr = 10* torch.log10(reference_pow) -10 * torch.log10(error_pow)
     return si_snr.item()
 
-#——————————画波形/声谱图———————————
-def plot(waveform, title, sample_rate=16000):
-    wav_numpy = waveform.numpy()
-    sample_size = waveform.shape[1]
-    time_axis = torch.arange(0, sample_size) / sample_rate
+def to_mono_16k(wav, sr):
+    if wav.dim() == 2 and wav.size(0) > 1:
+        wav = wav.mean(dim=0, keepdim=True)
+    elif wav.dim() == 1:
+        wav = wav.unsqueeze(0)
+    if sr != SR:
+        wav = F.resample(wav, sr, SR)
+    return wav
 
-    figure, axes = plt.subplots(2,1)
-    axes[0].plot(time_axis, wav_numpy[0], linewidth=1)
-    axes[0].grid(True)
-    axes[1].specgram(wav_numpy[0], Fs=sample_rate)
-    figure.suptitle(title)
+def crop_to_min_len(a, b):
+    """对齐到相同最短长度"""
+    L = min(a.size(-1), b.size(-1))
+    return a[..., :L], b[..., :L]
 
-# SAMPLE_SPEECH = torchaudio.load("Lab41-SRI-VOiCES-src-sp0307-ch127535-sg0042.wav")
-# SAMPLE_NOISE = torchaudio.load("Lab41-SRI-VOiCES-rm1-babb-mc01-stu-clo.wav")
+def match_len_like(target_len, x):
+    """把x调整为与target_len一样长"""
+    T = x.size(-1)
+    if T == target_len:
+        return x
+    if T > target_len:
+        return x[..., :target_len]
+    repeat = (target_len + T - 1) // T
+    return x.repeat(1, repeat)[..., :target_len]
 
-WAVEFORM_SPEECH, SAMPLE_RATE_SPEECH = torchaudio.load(r"D:\PythonProject\QoS\dataset\Speaker1_C_0.wav")
-WAVEFORM_NOISE, SAMPLE_RATE_NOISE = torchaudio.load("Lab41-SRI-VOiCES-rm1-babb-mc01-stu-clo.wav")# 噪声
-# WAVEFORM_DISTORTED, SAMPLE_RATE_DISTORTED = torchaudio.load(r"D:\PythonProject\QoS\dataset\Speaker1_C_1.wav")
+def extract_mos(out):
+    if isinstance(out, torch.Tensor):
+        return float(out.squeeze().item())
+    if hasattr(out, "mos"):
+        return float(out.mos.squeeze().item())
+    return float(out.squeeze().item())
 
-#单通道
-print(WAVEFORM_SPEECH.shape)
-print(WAVEFORM_NOISE.shape)
-WAVEFORM_SPEECH = WAVEFORM_SPEECH.mean(dim=0,keepdim=True)
-WAVEFORM_NOISE =WAVEFORM_NOISE[0:1, :]#取一通道
-# WAVEFORM_DISTORTED = WAVEFORM_DISTORTED.mean(dim=0,keepdim=True)
+# 加载唯一噪声
+noise_wav, sr_n = torchaudio.load(NOISE_PATH)
+noise_wav = to_mono_16k(noise_wav, sr_n).to(device)
 
-#SQUIM仅支持16kHz，重采样到16k
-if SAMPLE_RATE_SPEECH != 16000:
-    WAVEFORM_SPEECH = F.resample(WAVEFORM_SPEECH, SAMPLE_RATE_SPEECH, 16000)
-if SAMPLE_RATE_NOISE != 16000:
-    WAVEFORM_NOISE = F.resample(WAVEFORM_NOISE, SAMPLE_RATE_NOISE, 16000)
+# 加载多条 NMR
+nmr_paths = sorted(glob.glob(os.path.join(NMR_DIR, "*.wav")))
+if len(nmr_paths) < 1:
+    raise RuntimeError("NMR_DIR 为空，请放入多条干净语音")
+nmr_list = []
+for p in nmr_paths:
+    try:
+        w, sr = torchaudio.load(p)
+        w = to_mono_16k(w, sr).to(device)
+        nmr_list.append(w)
+    except Exception as e:
+        print("跳过NMR:", p, "错误:", e)
+print(f"NMR 准备完成，共 {len(nmr_list)} 条")
 
-#对齐长度（裁剪到相同的帧数）
-min_len= min(WAVEFORM_SPEECH.shape[1], WAVEFORM_NOISE.shape[1])
-WAVEFORM_SPEECH = WAVEFORM_SPEECH[:, :min_len]
-WAVEFORM_NOISE = WAVEFORM_NOISE[:, :min_len]
+# 老师模型
+objective_model = SQUIM_OBJECTIVE.get_model().to(device).eval()
+subjective_model = SQUIM_SUBJECTIVE.get_model().to(device).eval()
 
-#————————合成失真语音————————
-# snr_dbs = torch.tensor([20,-5])
-snr_dbs = torch.tensor([-5])
-WAVEFORM_DISTORTED = F.add_noise(WAVEFORM_SPEECH, WAVEFORM_NOISE, snr_dbs)
+# 遍历训练集
+wav_paths = sorted(glob.glob(os.path.join(CLEAN_DIR, "**", "*.wav"), recursive=True))
+print(f"共 {len(wav_paths)} 条干净语音")
 
-#————————可视化————————
+os.makedirs(os.path.dirname(OUT_CSV), exist_ok=True)
+with open(OUT_CSV, "w", newline="", encoding="utf-8") as f:
+    writer = csv.writer(f)
+    writer.writerow([
+        "path_clean", "snr_db",
+        "stoi_ref", "pesq_ref", "si_snr_ref",
+        "stoi_hyp", "pesq_hyp", "si_sdr_hyp",
+        "mos_clean", "mos_dist"
+    ])
 
-plot(WAVEFORM_SPEECH, "Clean Speech")
-plot(WAVEFORM_NOISE, "Noise")
-# plot(WAVEFORM_DISTORTED[0:1], f"Distorted Speech with {snr_dbs[0]}dB SNR")
-# plot(WAVEFORM_DISTORTED[1:2], f"Distorted Speech with {snr_dbs[1]}dB SNR")
-plot(WAVEFORM_DISTORTED, "Distorted Speech")
-plt.show()
+    for i, cpath in enumerate(wav_paths, 1):
+        try:
+            clean_wav, sr_c = torchaudio.load(cpath)
+            clean_wav = to_mono_16k(clean_wav, sr_c).to(device)
 
-#————————客观评估指标————————
-objective_model = SQUIM_OBJECTIVE.get_model()
+            # clean/noise 对齐
+            clean_ref, noise_ref = crop_to_min_len(clean_wav, noise_wav)
 
-stoi_hyp, pesq_hyp, si_sdr_hyp = objective_model(WAVEFORM_DISTORTED)
-print("Estimated metrics for distorted speech\n")
-print(f"STOI: {stoi_hyp[0]}")
-print(f"PESQ: {pesq_hyp[0]}")
-print(f"SI-SDR: {si_sdr_hyp[0]}\n")
+            for snr_db in SNR_LIST:
+                distorted = F.add_noise(clean_ref, noise_ref, torch.tensor([float(snr_db)], dtype=torch.float32))[0:1, :]
 
-pesq_ref = pesq(16000, WAVEFORM_SPEECH[0].numpy(), WAVEFORM_DISTORTED[0].numpy(), mode="wb")
-stoi_ref = stoi(WAVEFORM_SPEECH[0].numpy(), WAVEFORM_DISTORTED[0].numpy(), 16000, extended=False)
-si_sdr_ref = si_snr(WAVEFORM_DISTORTED, WAVEFORM_SPEECH)
-print("Reference metrics for distorted speech\n")
-print(f"STOI: {stoi_ref}")
-print(f"PESQ: {pesq_ref}")
-print(f"SI-SDR: {si_sdr_ref}")
+                # --- 参考指标 ---
+                try:
+                    pesq_ref = pesq(SR, clean_ref[0].cpu().numpy(), distorted[0].cpu().numpy(), mode="wb")
+                except Exception:
+                    pesq_ref = float("nan")
+                try:
+                    stoi_ref = stoi(clean_ref[0].cpu().numpy(), distorted[0].cpu().numpy(), SR, extended=False)
+                except Exception:
+                    stoi_ref = float("nan")
+                try:
+                    si_snr_ref = si_snr(distorted.cpu(), clean_ref.cpu())
+                except Exception:
+                    si_snr_ref = float("nan")
 
-#———————————————MOS+NMR————————————————
-subjective_model = SQUIM_SUBJECTIVE.get_model()
+                # --- 老师客观预测 ---
+                with torch.inference_mode():
+                    stoi_hyp, pesq_hyp, si_sdr_hyp = objective_model(distorted)
+                stoi_hyp = float(stoi_hyp.squeeze().item())
+                pesq_hyp = float(pesq_hyp.squeeze().item())
+                si_sdr_hyp = float(si_sdr_hyp.squeeze().item())
 
-#NMR语音
-# NMR_SPEECH = torchaudio.load("1688-142285-0007.wav")
-WAVEFORM_NMR, SAMPLE_RATE_NMR = torchaudio.load(r"D:\PythonProject\QoS\AISHELL-2-sample\data\wav\C0936\IC0936W0131.wav")#AISHELL-2中文语音数据集
-if SAMPLE_RATE_NMR != 16000:
-    WAVEFORM_NMR = F.resample(WAVEFORM_NMR, SAMPLE_RATE_NMR, 16000)
-plot(WAVEFORM_NMR, "NMR")
-plt.show()
+                # --- 主观 MOS（多NMR平均）---
+                with torch.inference_mode():
+                    # 干净
+                    scores_c = []
+                    for nmr in nmr_list:
+                        nmr_c = match_len_like(clean_ref.size(-1), nmr)
+                        scores_c.append(extract_mos(subjective_model(clean_ref, nmr_c)))
+                    mos_clean = sum(scores_c) / len(scores_c)
 
+                    # 失真
+                    scores_d = []
+                    for nmr in nmr_list:
+                        nmr_d = match_len_like(distorted.size(-1), nmr)
+                        scores_d.append(extract_mos(subjective_model(distorted, nmr_d)))
+                    mos_dist = sum(scores_d) / len(scores_d)
 
-#估计MOS
-mos = []
-mos.append(subjective_model(WAVEFORM_SPEECH, WAVEFORM_NMR)[0].item())
-mos.append(subjective_model(WAVEFORM_DISTORTED, WAVEFORM_NMR)[0].item())
-print(f"Estimated MOS for clean speech is MOS: {mos[0]}")
-print(f"Estimated MOS for distorted speech is MOS: {mos[1]}")
+                writer.writerow([
+                    cpath, snr_db,
+                    f"{stoi_ref:.6f}", f"{pesq_ref:.6f}", f"{si_snr_ref:.6f}",
+                    f"{stoi_hyp:.6f}", f"{pesq_hyp:.6f}", f"{si_sdr_hyp:.6f}",
+                    f"{mos_clean:.6f}", f"{mos_dist:.6f}"
+                ])
+        except Exception as e:
+            print(f"[{i}/{len(wav_paths)}] 跳过 {cpath} 错误：{e}")
 
+        if i % 20 == 0:
+            print(f"进度 [{i}/{len(wav_paths)}]")
 
-
-```
-
-
-```python
-
-import numpy as np
-import matplotlib.pyplot as plt
-import torch
-import torchaudio
-from pesq import pesq
-from pystoi import stoi
-from torchaudio.pipelines import SQUIM_OBJECTIVE, SQUIM_SUBJECTIVE
-from torchaudio.utils import download_asset
-import torchaudio.functional as F
-#播放音频
-from scipy.io import wavfile
-import sounddevice as sd
-
-#——————————计算SI-SNR，用于和模型估计的SI-SNR对照——————————
-def si_snr(estimate, reference, epsilon=1e-8):
-    estimate = estimate - estimate.mean()#去直流分量
-    reference = reference - reference.mean()
-    reference_pow = reference.pow(2).mean(axis=1, keepdim=True)#计算信号能量  .mean(axis=1, keepdim=True)：沿时间轴（假设 axis=1 是时间维度）求平均，保留原来的维度结构
-    mix_pow = (estimate * reference).mean(axis=1, keepdim=True)#信号与参考信号的互相关
-    scale = mix_pow / (reference_pow + epsilon) #优缩放因子 α
-    reference = scale * reference
-    error = estimate - reference
-
-    reference_pow = reference.pow(2)
-    error_pow = error.pow(2)
-
-    reference_pow = reference_pow.mean(axis=1)
-    error_pow = error_pow.mean(axis=1)
-
-    si_snr = 10* torch.log10(reference_pow) -10 * torch.log10(error_pow)
-    return si_snr.item()
-
-#——————————画波形/声谱图———————————
-def plot(waveform, title, sample_rate=16000):
-    wav_numpy = waveform.numpy()
-    sample_size = waveform.shape[1]
-    time_axis = torch.arange(0, sample_size) / sample_rate
-
-    figure, axes = plt.subplots(2,1)
-    axes[0].plot(time_axis, wav_numpy[0], linewidth=1)
-    axes[0].grid(True)
-    axes[1].specgram(wav_numpy[0], Fs=sample_rate)
-    figure.suptitle(title)
-
-# SAMPLE_SPEECH = torchaudio.load("Lab41-SRI-VOiCES-src-sp0307-ch127535-sg0042.wav")
-# SAMPLE_NOISE = torchaudio.load("Lab41-SRI-VOiCES-rm1-babb-mc01-stu-clo.wav")
-
-WAVEFORM_SPEECH, SAMPLE_RATE_SPEECH = torchaudio.load("Lab41-SRI-VOiCES-src-sp0307-ch127535-sg0042.wav")
-WAVEFORM_NOISE, SAMPLE_RATE_NOISE = torchaudio.load("Lab41-SRI-VOiCES-rm1-babb-mc01-stu-clo.wav")
-WAVEFORM_NOISE =WAVEFORM_NOISE[0:1, :]#取一通道
-
-#SQUIM仅支持16kHz，重采样到16k
-if SAMPLE_RATE_SPEECH != 16000:
-    WAVEFORM_SPEECH = F.resample(WAVEFORM_SPEECH, SAMPLE_RATE_SPEECH, 16000)
-if SAMPLE_RATE_NOISE != 16000:
-    WAVEFORM_NOISE = F.resample(WAVEFORM_NOISE, SAMPLE_RATE_NOISE, 16000)
-
-#对齐长度（裁剪到相同的帧数）
-if WAVEFORM_SPEECH.shape[1] < WAVEFORM_NOISE.shape[1]:
-    WAVEFORM_NOISE = WAVEFORM_NOISE[:, : WAVEFORM_SPEECH.shape[1]]
-else:
-    WAVEFORM_SPEECH = WAVEFORM_SPEECH[:, : WAVEFORM_NOISE.shape[1]]
-
-#————————合成两段不同SNR的失真语音————————
-snr_dbs = torch.tensor([20,-5])
-WAVEFORM_DISTORTED = F.add_noise(WAVEFORM_SPEECH, WAVEFORM_NOISE, snr_dbs)
-
-#————————可视化————————
-
-plot(WAVEFORM_SPEECH, "Clean Speech")
-plot(WAVEFORM_NOISE, "Noise")
-plot(WAVEFORM_DISTORTED[0:1], f"Distorted Speech with {snr_dbs[0]}dB SNR")
-plot(WAVEFORM_DISTORTED[1:2], f"Distorted Speech with {snr_dbs[1]}dB SNR")
-plt.show()
-
-#————————客观评估指标————————
-objective_model = SQUIM_OBJECTIVE.get_model()
-
-# 20 dB 样本的预测与参考对照
-stoi_hyp, pesq_hyp, si_sdr_hyp = objective_model(WAVEFORM_DISTORTED[0:1, :])
-print(f"Estimated metrics for distorted speech at {snr_dbs[0]}dB are\n")
-print(f"STOI: {stoi_hyp[0]}")
-print(f"PESQ: {pesq_hyp[0]}")
-print(f"SI-SDR: {si_sdr_hyp[0]}\n")
-
-pesq_ref = pesq(16000, WAVEFORM_SPEECH[0].numpy(), WAVEFORM_DISTORTED[0].numpy(), mode="wb")
-stoi_ref = stoi(WAVEFORM_SPEECH[0].numpy(), WAVEFORM_DISTORTED[0].numpy(), 16000, extended=False)
-si_sdr_ref = si_snr(WAVEFORM_DISTORTED[0:1], WAVEFORM_SPEECH)
-print(f"Reference metrics for distorted speech at {snr_dbs[0]}dB are\n")
-print(f"STOI: {stoi_ref}")
-print(f"PESQ: {pesq_ref}")
-print(f"SI-SDR: {si_sdr_ref}")
-
-# -5 dB 样本的预测与参考对照
-stoi_hyp, pesq_hyp, si_sdr_hyp = objective_model(WAVEFORM_DISTORTED[1:2, :])
-print(f"Estimated metrics for distorted speech at {snr_dbs[1]}dB are\n")
-print(f"STOI: {stoi_hyp[0]}")
-print(f"PESQ: {pesq_hyp[0]}")
-print(f"SI-SDR: {si_sdr_hyp[0]}\n")
-
-pesq_ref = pesq(16000, WAVEFORM_SPEECH[0].numpy(), WAVEFORM_DISTORTED[0].numpy(), mode="wb")
-stoi_ref = stoi(WAVEFORM_SPEECH[0].numpy(), WAVEFORM_DISTORTED[1].numpy(), 16000, extended=False)
-si_sdr_ref = si_snr(WAVEFORM_DISTORTED[1:2], WAVEFORM_SPEECH)
-print(f"Reference metrics for distorted speech at {snr_dbs[1]}dB are\n")
-print(f"STOI: {stoi_ref}")
-print(f"PESQ: {pesq_ref}")
-print(f"SI-SDR: {si_sdr_ref}")
-
-#————————————————主管指标评估 MOS+NMR————————————————
-subjective_model = SQUIM_SUBJECTIVE.get_model()
-
-#NMR语音
-# NMR_SPEECH = torchaudio.load("1688-142285-0007.wav")
-WAVEFORM_NMR, SAMPLE_RATE_NMR = torchaudio.load("1688-142285-0007.wav")
-if SAMPLE_RATE_NMR != 16000:
-    WAVEFORM_NMR = F.resample(WAVEFORM_NMR, SAMPLE_RATE_NMR, 16000)
-
-#对两段SNR失真语音估计MOS
-mos = subjective_model(WAVEFORM_DISTORTED[0:1, :], WAVEFORM_NMR)
-print(f"Estimated MOS for distorted speech at {snr_dbs[0]}dB is MOS: {mos[0]}")
-
-mos = subjective_model(WAVEFORM_DISTORTED[1:2, :], WAVEFORM_NMR)
-print(f"Estimated MOS for distorted speech at {snr_dbs[1]}dB is MOS: {mos[0]}")
+print("批量打标签完成 ->", OUT_CSV)
 ```
 
 
